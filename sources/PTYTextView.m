@@ -218,6 +218,8 @@ static const int kDragThreshold = 3;
     BOOL _showStripesWhenBroadcastingInput;
 
     iTermFindOnPageHelper *_findOnPageHelper;
+
+    BOOL doCommandBySelectorCalled;
 }
 
 
@@ -370,7 +372,7 @@ static const int kDragThreshold = 3;
     [_drawingHook release];
     _drawingHelper.delegate = nil;
     [_drawingHelper release];
-    
+
     [super dealloc];
 }
 
@@ -1228,7 +1230,7 @@ static const int kDragThreshold = 3;
     // Keep correct selection highlighted
     [_selection moveUpByLines:scrollbackOverflow];
     [_oldSelection moveUpByLines:scrollbackOverflow];
-    
+
     // Keep the user's current scroll position.
     NSScrollView *scrollView = [self enclosingScrollView];
     BOOL canSkipRedraw = NO;
@@ -1245,7 +1247,7 @@ static const int kDragThreshold = 3;
         }
         [self scrollRectToVisible:scrollRect];
     }
-    
+
     // NOTE: I used to use scrollRect:by: here, and it is faster, but it is
     // absolutely a lost cause as far as correctness goes. When drawRect
     // gets called it needs to take that scrolling (which would happen
@@ -1253,14 +1255,14 @@ static const int kDragThreshold = 3;
     // getting that right. I don't *think* it's a meaningful performance issue.
     // Because of a bug, we were always drawing the whole screen anyway. And if
     // the screen has scrolled by less than its height, input is coming in
-    // slowly anyway.    
+    // slowly anyway.
     if (!canSkipRedraw) {
         [self setNeedsDisplay:YES];
     }
-    
+
     // Move subviews up
     [self updateNoteViewFrames];
-    
+
     NSAccessibilityPostNotification(self, NSAccessibilityRowCountChangedNotification);
 }
 
@@ -1770,6 +1772,7 @@ static const int kDragThreshold = 3;
     // Control+Key doesn't work right with custom keyboard layouts. Handle ctrl+key here for the
     // standard combinations.
     BOOL workAroundControlBug = NO;
+#if 0
     if (!prev &&
         (modflag & (NSControlKeyMask | NSCommandKeyMask | NSAlternateKeyMask)) == NSControlKeyMask) {
         DLog(@"Special ctrl+key handler running");
@@ -1800,10 +1803,12 @@ static const int kDragThreshold = 3;
             }
         }
     }
+#endif
 
     if (!workAroundControlBug) {
         // Let the IME process key events
         _inputMethodIsInserting = NO;
+        doCommandBySelectorCalled = NO;
         DLog(@"PTYTextView keyDown send to IME");
 
         // In issue 2743, it is revealed that in OS 10.9 this sometimes calls -insertText on the
@@ -1817,6 +1822,7 @@ static const int kDragThreshold = 3;
         // If the IME didn't want it, pass it on to the delegate
         if (!prev &&
             !_inputMethodIsInserting &&
+            doCommandBySelectorCalled &&
             ![self hasMarkedText]) {
             DLog(@"PTYTextView keyDown IME no, send to delegate");
             [delegate keyDown:event];
@@ -3490,7 +3496,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
                                     faint:NO
                              isBackground:YES];
     fgColor = [fgColor colorByPremultiplyingAlphaWithColor:bgColor];
-    
+
     int underlineStyle = c.underline ? (NSUnderlineStyleSingle | NSUnderlineByWordMask) : 0;
 
     BOOL isItalic = c.italic;
@@ -4422,6 +4428,7 @@ static double EuclideanDistance(NSPoint p1, NSPoint p2) {
 - (void)doCommandBySelector:(SEL)aSelector
 {
     DLog(@"doCommandBySelector:%@", NSStringFromSelector(aSelector));
+    doCommandBySelectorCalled = YES;
     if (gCurrentKeyEventTextView && self != gCurrentKeyEventTextView) {
         // See comment in -keyDown:
         DLog(@"Rerouting doCommandBySelector from %@ to %@", self, gCurrentKeyEventTextView);
